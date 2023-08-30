@@ -6,7 +6,6 @@ import (
 	"html/template"
 	"net/http"
 	"regexp"
-
 	_ "github.com/lib/pq"
 )
 
@@ -21,14 +20,26 @@ func main(){
     if err != nil {
         fmt.Println(fmt.Errorf(" %w", err))
     }
+    http.HandleFunc("/tmp", func(w http.ResponseWriter, req *http.Request){http.ServeFile(w,req,"index.html")})
     http.HandleFunc("/",resolve_comments(db))
+    http.HandleFunc("/post/", post_comment(db))
     go http.ListenAndServe(":8080",nil)
     fmt.Println("Listening on 8080")
     select {}
 }
-func post_comment(db *sql.DB) func(w http.ResponseWriter, req http.Request){
-return func (w http.ResponseWriter, req http.Request){
+
+func post_comment(db *sql.DB) func(w http.ResponseWriter, req *http.Request){
+return func (w http.ResponseWriter, req *http.Request){
     cookie, err := req.Cookie("login")
+    err = req.ParseForm()
+    if err != nil {
+	fmt.Println(err)
+    }
+    pf := req.Form
+    username := pf.Get("username")
+    post := pf.Get("post")
+    fmt.Println("username: ", username)
+    fmt.Println("post:", post)
     if err == http.ErrNoCookie {
 	w.Write([]byte("I don't know how you did this but please stop"))
     }
@@ -42,6 +53,7 @@ return func (w http.ResponseWriter, req http.Request){
     w.Write([]byte(post_fragment))
 }
 }
+
 //TODO: change to query sql db instead of giving a static comment list
 func query_comments(db *sql.DB) []Comment{
     return []Comment{
@@ -78,7 +90,6 @@ return func(w http.ResponseWriter,req *http.Request){
         return
     }
     w.Header().Add("Content-Type", "text/html")
-    w.Write([]byte("<noscript>You need to enable javascript to write comments</noscript>"))
 
 
     comments := query_comments(db)

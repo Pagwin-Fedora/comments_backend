@@ -1,0 +1,22 @@
+<html>
+<head>
+    <meta charset="utf-8">
+
+    <title></title>
+    <script src="https://unpkg.com/htmx.org@1.9.5"></script>
+</head>
+<body>
+    <form id="submission-form" hx-trigger="submit" hx-target="this" hx-post="/post" hx-swap="afterend">
+	<label for="username">username</label>
+	<input name="username" id="username" type="text" placeholder="username"/>
+	<label for="post">post</label>
+	<input name="post" id="post" type="text" placeholder="post"/>
+	<label for="submit">submit</label>
+	<input name="submit" id="submit" type="submit" value="submit post"/>
+    </form>
+    <noscript>
+        you need to enable javascript to view comments(or be a wizard)
+    </noscript>
+    <div hx-get="/yoo" hx-target="this" hx-trigger="load" hx-swap="outerHTML"></div>
+</body>
+</html>
