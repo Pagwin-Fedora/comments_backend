@@ -1,12 +1,13 @@
 package main
 
 import (
-    "html/template"
-    "net/http"
-    _ "database/sql"
-    _ "github.com/lib/pq"
-    "fmt"
-    "regexp"
+	"database/sql"
+	"fmt"
+	"html/template"
+	"net/http"
+	"regexp"
+
+	_ "github.com/lib/pq"
 )
 
 type Comment struct {
@@ -15,37 +16,81 @@ type Comment struct {
 }
 
 func main(){
-    //connStr := "user=pqgotest dbname=pqgotest sslmode=verify-full"
-    //db, err := sql.Open("postgres", connStr)
-    //if err != nil {
-    //    fmt.Errorf(" %w", err)
-    //}
-    http.HandleFunc("/",resolve_comments)
-    http.ListenAndServe(":8080",nil)
+    connStr := "user=pqgotest dbname=pqgotest sslmode=verify-full"
+    db, err := sql.Open("postgres", connStr)
+    if err != nil {
+        fmt.Println(fmt.Errorf(" %w", err))
+    }
+    http.HandleFunc("/",resolve_comments(db))
+    go http.ListenAndServe(":8080",nil)
+    fmt.Println("Listening on 8080")
+    select {}
 }
-
-func resolve_comments(w http.ResponseWriter,req *http.Request){
-    //boilerplate
-    url := fmt.Sprint(req.URL)
-    mat, err := regexp.Match(".*favicon.ico",[]byte(url))
-    //TODO: handle the error correctly
-    if err != nil || mat{
+func post_comment(db *sql.DB) func(w http.ResponseWriter, req http.Request){
+return func (w http.ResponseWriter, req http.Request){
+    cookie, err := req.Cookie("login")
+    if err == http.ErrNoCookie {
+	w.Write([]byte("I don't know how you did this but please stop"))
+    }
+    post_fragment, err :=resolve_cookie(cookie,err)
+    if err != nil {
         w.Write([]byte(""))
+        w.WriteHeader(500)
         return
     }
-    w.Header().Add("Content-Type", "text/html")
-    w.Write([]byte("<noscript>You need to enable javascript to see comments</noscript>"))
-
-
-    //TODO: replace with grabbing comments from sql
-    comments := []Comment{
+    // TODO: handle form post or whatever htmx sends and turn that into a comment Object which we can apply a template to and stick into the db also stick comment into db based on uri /article-name/post
+    w.Write([]byte(post_fragment))
+}
+}
+//TODO: change to query sql db instead of giving a static comment list
+func query_comments(db *sql.DB) []Comment{
+    return []Comment{
 	{
 	    Username:"e",
 	    Content:"<script>alert(1)</script>",
 	},
     }
+}
+
+func resolve_cookie(cookie *http.Cookie, err error) (string, error){
+    if err == http.ErrNoCookie{
+	return "login button goes here", nil
+    }
+    if err != nil{
+	return "", err
+    }
+    return "interface to post comment goes here", nil
+}
+
+func  resolve_comments(db *sql.DB) func (w http.ResponseWriter,req *http.Request){
+return func(w http.ResponseWriter,req *http.Request){
+    //boilerplate
+    url := fmt.Sprint(req.URL)
+    mat, err := regexp.Match(".*favicon.ico",[]byte(url))
+    if err != nil{
+        w.Write([]byte("error with the regex"))
+	w.WriteHeader(500)
+        return
+    }
+    if mat{
+	w.WriteHeader(404)
+	w.Header().Set("Status","404")
+        return
+    }
+    w.Header().Add("Content-Type", "text/html")
+    w.Write([]byte("<noscript>You need to enable javascript to write comments</noscript>"))
+
+
+    comments := query_comments(db)
     
-    //TODO: add in code to check for a login cookie, if one is present then great just give the static snippet for typing and submitting a comment(using htmx for convenience) if there's no login cookie then put a button telling the user to login if they want to comment
+    cookie, err := req.Cookie("login")
+    fragment, err := resolve_cookie(cookie,err)
+    if err != nil {
+        w.Write([]byte("error handling cookie"))
+        w.WriteHeader(500)
+        return
+    }
+    w.Write([]byte(fragment))
 
     //Does the work of rendering out the comments we got
     tmpl, err := template.New("Comment list template").Parse("{{range .}} <h4> {{.Username}} posted</h4>{{.Content}}{{end}}")
@@ -53,4 +98,5 @@ func resolve_comments(w http.ResponseWriter,req *http.Request){
         fmt.Print(fmt.Errorf(" %w\n", err))
     }
     tmpl.Execute(w,comments)
+}
 }
