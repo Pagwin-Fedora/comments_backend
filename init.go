@@ -1,14 +1,18 @@
 package main
 
 import (
-    "database/sql"
-    "fmt"
-    "html/template"
-    "net/http"
-    "regexp"
-    "encoding/json"
-    _ "github.com/lib/pq"
-    "golang.org/x/oauth2"
+	"context"
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"html/template"
+	"net/http"
+	"os"
+	"regexp"
+	_ "github.com/lib/pq"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/github"
+	"golang.org/x/oauth2/google"
 )
 
 type Comment struct {
@@ -31,15 +35,22 @@ var tmpl, err = template.New("Comment template").Parse(`
 func main(){
     connStr := "user=pqgotest dbname=pqgotest sslmode=verify-full"
     db, err := sql.Open("postgres", connStr)
+    if err != nil {
+	fmt.Println(fmt.Errorf("error: %w", err))
+        return
+    }
     // refer to https://github.com/golang/oauth2/blob/master/example_test.go
-    oauth_cfg := &oauth2.Config{
-		ClientID:     "YOUR_CLIENT_ID",
-		ClientSecret: "YOUR_CLIENT_SECRET",
-		Scopes:       []string{"SCOPE1", "SCOPE2"},
-		Endpoint: oauth2.Endpoint{
-			AuthURL:  "https://provider.com/o/oauth2/auth",
-			TokenURL: "https://provider.com/o/oauth2/token",
-		},
+    google_oauth_cfg := &oauth2.Config{
+		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
+		ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+		Scopes:       []string{},
+		Endpoint: google.Endpoint,
+	}
+    github_oauth_cfg := &oauth2.Config{
+		ClientID:     os.Getenv("GITHUB_CLIENT_ID"),
+		ClientSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
+		Scopes:       []string{},
+		Endpoint: github.Endpoint,
 	}
     if err != nil {
         fmt.Println(fmt.Errorf(" %w", err))
@@ -47,9 +58,38 @@ func main(){
     http.HandleFunc("/tmp", func(w http.ResponseWriter, req *http.Request){http.ServeFile(w,req,"index.html")})
     http.HandleFunc("/",resolve_comments(db))
     http.HandleFunc("/post/", post_comment(db))
+    http.HandleFunc("/oauth",oauth_callback)
     go http.ListenAndServe(":8080",nil)
     fmt.Println("Listening on 8080")
     select {}
+}
+
+func oauth_callback(w http.ResponseWriter, req *http.Request){
+    ctx := context.Background()
+    db := ctx.Value("db").(*sql.DB)
+    ref := req.Referer()
+    mat, err := regexp.Match(`google\.com`,[]byte(ref))
+    if err != nil {
+        w.Write([]byte("regex oops"))
+        w.WriteHeader(500)
+        return
+    }
+    // set which table
+    var table_prefix string
+    if mat{
+	//google case 
+	table_prefix = ""
+    } else {
+	//github case 
+	table_prefix = ""
+    }
+    var username string
+    err = db.QueryRow(fmt.Sprintf("SELECT username FROM %s_oauth WHERE token=?", table_prefix), idk_figure_out_where_oauth_token_at).Scan(&username)
+    if err == sql.ErrNoRows {
+	// TODO: figure out how tf we get the username that the user wants
+	err = db.Exec("")
+    }
+    w.Header().Add("Set-Cookie","login=")
 }
 
 func post_comment(db *sql.DB) func(w http.ResponseWriter, req *http.Request){
