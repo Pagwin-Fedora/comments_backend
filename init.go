@@ -8,12 +8,12 @@ import (
 	"html/template"
 	"net/http"
 	"runtime/debug"
-
-	//"os"
+	"os"
+	"strconv"
 	"regexp"
-	//_ "github.com/lib/pq"
+	_ "github.com/lib/pq"
 	"github.com/jmoiron/sqlx"
-	_ "github.com/mattn/go-sqlite3"
+	//_ "github.com/mattn/go-sqlite3"
 )
 
 type Comment struct {
@@ -36,17 +36,22 @@ var tmpl, err = template.New("Comment template").Parse(`
     `)
 
 func main(){
-    //connStr := "user=pqgotest dbname=pqgotest sslmode=verify-full"
-    //db, err := sql.Open("postgres", connStr)
+    connStr, err := gen_pq_str()
+    if err != nil {
+	fmt.Errorf("Bad Env var")
+	os.Exit(1)
+    }
+    db, err := sql.Open("postgres", connStr)
 
-    // while testing using sqlite
-    // https://github.com/mattn/go-sqlite3#connection-string
-    connStr := "file:test.db"
-    db, err := sqlx.Open("sqlite3", connStr)
+    //// while testing using sqlite
+    //// https://github.com/mattn/go-sqlite3#connection-string
+    //connStr := "file:test.db"
+    //db, err := sqlx.Open("sqlite3", connStr)
+
     defer db.Close()
     if err != nil {
 	fmt.Println(fmt.Errorf("error: %w", err))
-        return
+        os.Exit(1)
     }
 
     http.HandleFunc("/tmp", func(w http.ResponseWriter, req *http.Request){http.ServeFile(w,req,"index.html")})
@@ -213,4 +218,48 @@ return func(w http.ResponseWriter,req *http.Request){
     }
     tmpl.ExecuteTemplate(w,"list",comments)
 }
+}
+
+func gen_pq_str() (string, error){
+    // setup the defaults
+    URI := "localhost"
+    Port := uint16(5432)
+    User := "commentsdb"
+    Password := "CHANGEME!!!"
+    DBName := "commentsdb"
+    //refer to docs if changing https://pkg.go.dev/github.com/lib/pq#hdr-Connection_String_Parameters
+    SSL := "disable"
+    
+    tmp, set := os.LookupEnv("DB_URI")
+    if set {
+	URI = tmp
+    }
+    
+    tmp, set = os.LookupEnv("DB_PORT")
+    if set {
+	tmp, err := strconv.ParseUint(tmp,10,16)
+	if err != nil {
+	    return "", err
+	}
+	Port = uint16(tmp)
+    }
+
+    tmp, set = os.LookupEnv("DB_USER")
+    if set {
+	User = tmp
+    }
+    tmp, set = os.LookupEnv("DB_PASSWORD")
+    if set {
+	Password = tmp
+    }
+    tmp, set = os.LookupEnv("DB_NAME")
+    if set {
+	DBName = tmp
+    }
+    tmp, set = os.LookupEnv("DB_SSL")
+    if set {
+	SSL = tmp
+    }
+
+    return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s", URI, Port, User, Password, DBName, SSL), nil
 }

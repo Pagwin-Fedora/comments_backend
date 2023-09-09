@@ -1,4 +1,4 @@
-module comments_backend/m/v2
+module comments_backend/comments/v2
 
 go 1.21.0
 

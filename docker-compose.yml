@@ -1,0 +1,34 @@
+version: "3"
+# referencing the invidious docker compose file was very helpful when writing this one https://github.com/iv-org/invidious/blob/master/docker-compose.yml
+services:
+  comments:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      # might be backwards
+      - "127.0.0.1:3939:8080"
+    environment:
+      DB_URI: comments-db
+      DB_PORT: 5432
+      DB_USER: kemal
+      DB_PASSWORD: kemal
+      DB_NAME: comments
+      DB_SSL: disable
+    depends-on:
+      - comments-db
+  comments-db:
+    image: docker.io/library/postgres:15
+    restart: unless-stopped
+    volumes:
+      - postgresdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: comments
+      # yes I'm stealing the invidious postgres user
+      POSTGRES_USER: kemal
+      POSTGRES_PASSWORD: kemal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+volumes:
+  postgresdata:
