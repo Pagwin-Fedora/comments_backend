@@ -85,8 +85,8 @@ func main(){
 	fmt.Println(fmt.Errorf("error: %w", err))
         os.Exit(1)
     }
-
-    http.HandleFunc("/tmp", func(w http.ResponseWriter, req *http.Request){http.ServeFile(w,req,"index.html")})
+    //// Uncomment if testing to see if this works
+    //http.HandleFunc("/tmp", func(w http.ResponseWriter, req *http.Request){http.ServeFile(w,req,"index.html")})
     http.HandleFunc("/",resolve_comments(db))
     http.HandleFunc("/post/", post_comment(db))
     go http.ListenAndServe(":8080",nil)
