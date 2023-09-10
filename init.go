@@ -41,12 +41,44 @@ func main(){
 	fmt.Errorf("Bad Env var")
 	os.Exit(1)
     }
-    db, err := sql.Open("postgres", connStr)
+    db, err := sqlx.Open("postgres", connStr)
+    if err != nil {
+	fmt.Println(fmt.Errorf("error: %w", err))
+        os.Exit(1)
+    }
+    _, err = db.Exec(`
+    CREATE TABLE IF NOT EXISTS comments(
+        -- postgres seems to have SERIAL so we can use that instead of this being a primary key
+        id SERIAL,
+        blog_post TEXT NOT NULL,
+        username TEXT NOT NULL,
+        email TEXT NOT NULL,
+        email_verified INTEGER NOT NULL,
+        website TEXT,
+        comment TEXT NOT NULL
+    );
+    `)
 
     //// while testing using sqlite
     //// https://github.com/mattn/go-sqlite3#connection-string
     //connStr := "file:test.db"
     //db, err := sqlx.Open("sqlite3", connStr)
+    //if err != nil {
+    //    fmt.Println(fmt.Errorf("error: %w", err))
+    //    os.Exit(1)
+    //}
+    //_, err = db.Exec(`
+    //CREATE TABLE IF NOT EXISTS comments(
+    //    -- postgres seems to have SERIAL so we can use that instead of this being a primary key
+    //    id INTEGER NOT NULL PRIMARY KEY,
+    //    blog_post TEXT NOT NULL,
+    //    username TEXT NOT NULL,
+    //    email TEXT NOT NULL,
+    //    email_verified INTEGER NOT NULL,
+    //    website TEXT,
+    //    comment TEXT NOT NULL
+    //);
+    //`)
 
     defer db.Close()
     if err != nil {

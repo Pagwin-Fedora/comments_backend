@@ -16,7 +16,7 @@ services:
       DB_PASSWORD: kemal
       DB_NAME: comments
       DB_SSL: disable
-    depends-on:
+    depends_on:
       - comments-db
   comments-db:
     image: docker.io/library/postgres:15
