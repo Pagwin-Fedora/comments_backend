@@ -7,8 +7,7 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      # might be backwards
-      - "127.0.0.1:3939:8080"
+      - "127.0.0.1:3939:80"
     environment:
       DB_URI: comments-db
       DB_PORT: 5432

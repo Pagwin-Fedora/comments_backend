@@ -12,7 +12,7 @@ RUN ["/bin/adduser", "-h", "/application", "-D", "application"]
 RUN ["/bin/chown", "-R", "application:application", "/application"]
 USER application
 
-EXPOSE 8080/tcp
+EXPOSE 80/tcp
 # default is localhost due to assuming it being run outside of a container but due to dockern networking we need to change it
 ENV DB_URI="host.docker.internal"
 COPY --from=build --chown=application:application /root/comments /application/comments

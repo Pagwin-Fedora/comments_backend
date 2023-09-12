@@ -89,8 +89,8 @@ func main(){
     //http.HandleFunc("/tmp", func(w http.ResponseWriter, req *http.Request){http.ServeFile(w,req,"index.html")})
     http.HandleFunc("/",resolve_comments(db))
     http.HandleFunc("/post/", post_comment(db))
-    go http.ListenAndServe(":8080",nil)
-    fmt.Println("Listening on 8080")
+    go http.ListenAndServe(":80",nil)
+    fmt.Println("Listening on 80")
     select {}
 }
 
