@@ -3,7 +3,7 @@ name: Publish as a container on gitub repo
 on:
   push:
     branches:
-      - master
+      - main
 # copied everything below this line from https://docs.github.com/en/actions/publishing-packages/publishing-docker-images
 env:
   REGISTRY: ghcr.io
