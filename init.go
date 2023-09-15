@@ -119,7 +119,7 @@ return func (w http.ResponseWriter, req *http.Request){
 	return
     }
     
-    err = insert_comment(db, req.URL.Path[5:], comment, false)
+    err = insert_comment(db, req.URL.Path, comment, false)
     if err != nil {
 	w.Write([]byte(fmt.Sprint("insertion error: ", err)))
 	w.WriteHeader(500)
@@ -203,8 +203,7 @@ func post_interface(path string, email_verified bool) string{
 	<br/>
 	<label for="post">post</label>
 	<input name="post" id="post" type="text" placeholder="post"/>
-	<label for="submit">submit</label>
-	<input name="submit" id="submit" type="submit"/>
+	<input name="submit" id="submit" value="submit comment" type="submit"/>
     </form>`, lead, path)
     return tmp
 }
