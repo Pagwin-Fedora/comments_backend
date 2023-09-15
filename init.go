@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
-	"runtime/debug"
+	//"runtime/debug"
 	"os"
 	"strconv"
 	"regexp"
@@ -88,7 +88,6 @@ func main(){
     //// Uncomment if testing to see if this works
     //http.HandleFunc("/tmp", func(w http.ResponseWriter, req *http.Request){http.ServeFile(w,req,"index.html")})
     http.HandleFunc("/",resolve_comments(db))
-    http.HandleFunc("/post/", post_comment(db))
     go http.ListenAndServe(":80",nil)
     fmt.Println("Listening on 80")
     select {}
@@ -195,7 +194,7 @@ func post_interface(path string, email_verified bool) string{
     if path[0] != '/' {
 	lead = "/"
     }
-    tmp :=  fmt.Sprintf(`<form hx-ext="json-enc" value="submit post"id="submission-form" hx-trigger="submit" hx-target="this" hx-post="/post%s%s" hx-swap="outerHTML">
+    tmp :=  fmt.Sprintf(`<form hx-ext="json-enc" value="submit post"id="submission-form" hx-trigger="submit" hx-target="this" hx-post="%s%s" hx-swap="outerHTML">
 	<label for="username">username</label>
 	<input name="username" id="username" type="text" placeholder="username"/>
 	<br/>
@@ -207,17 +206,17 @@ func post_interface(path string, email_verified bool) string{
 	<label for="submit">submit</label>
 	<input name="submit" id="submit" type="submit"/>
     </form>`, lead, path)
-    mat, _ := regexp.Match("post/post",[]byte(tmp))
-    if mat {
-	fmt.Println("stacktrace:")
-	debug.PrintStack()
-    }
     return tmp
 }
 
 func  resolve_comments(db *sqlx.DB) func (w http.ResponseWriter,req *http.Request){
 return func(w http.ResponseWriter,req *http.Request){
     //boilerplate
+    if req.Method == "POST" {
+	// this is hacky and the reason for why is because I didn't think through what I wanted the api to be at the start
+	post_comment(db)(w,req)
+	return
+    }
     url := fmt.Sprint(req.URL)
     mat, err := regexp.Match(".*favicon.ico",[]byte(url))
     if err != nil{
