@@ -106,7 +106,7 @@ return func (w http.ResponseWriter, req *http.Request){
 
     //post_fragment := post_interface("e")
     cookie, err := req.Cookie("login")
-    resolution := resolve_cookie(req.URL.Path[5:], cookie, comment.Email, err)
+    resolution := resolve_cookie(req.URL.Path, cookie, comment.Email, err)
     if resolution.Err != nil {
 	w.Write([]byte(fmt.Sprint("Error:",resolution.Err)))
         w.WriteHeader(500)
