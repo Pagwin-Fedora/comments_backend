@@ -1,0 +1,12 @@
+1. email verification
+I need to figure out if I can setup some smtp server or service and send an email with a verification link
+
+2. email blacklist
+
+add a system to blacklist emails via a regex (might make captcha somewhat redundant)
+
+3. captcha
+not immediately important but preferably I'll make it so spammers need to put in effort if they wanna be bastards
+
+4. pagination
+also not immediately important but ideally I'll have a system to
