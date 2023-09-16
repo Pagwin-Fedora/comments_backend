@@ -7,12 +7,15 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"strings"
+
 	//"runtime/debug"
 	"os"
-	"strconv"
 	"regexp"
-	_ "github.com/lib/pq"
+	"strconv"
+
 	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq"
 	//_ "github.com/mattn/go-sqlite3"
 )
 
@@ -36,16 +39,19 @@ var tmpl, err = template.New("Comment template").Parse(`
     `)
 
 func main(){
+
     connStr, err := gen_pq_str()
     if err != nil {
 	fmt.Errorf("Bad Env var")
 	os.Exit(1)
     }
     db, err := sqlx.Open("postgres", connStr)
+    defer db.Close()
     if err != nil {
 	fmt.Println(fmt.Errorf("error: %w", err))
         os.Exit(1)
     }
+    // DB stuff
     _, err = db.Exec(`
     CREATE TABLE IF NOT EXISTS comments(
         -- postgres seems to have SERIAL so we can use that instead of this being a primary key
@@ -58,35 +64,23 @@ func main(){
         comment TEXT NOT NULL
     );
     `)
-
-    //// while testing using sqlite
-    //// https://github.com/mattn/go-sqlite3#connection-string
-    //connStr := "file:test.db"
-    //db, err := sqlx.Open("sqlite3", connStr)
-    //if err != nil {
-    //    fmt.Println(fmt.Errorf("error: %w", err))
-    //    os.Exit(1)
-    //}
-    //_, err = db.Exec(`
-    //CREATE TABLE IF NOT EXISTS comments(
-    //    -- postgres seems to have SERIAL so we can use that instead of this being a primary key
-    //    id INTEGER NOT NULL PRIMARY KEY,
-    //    blog_post TEXT NOT NULL,
-    //    username TEXT NOT NULL,
-    //    email TEXT NOT NULL,
-    //    email_verified INTEGER NOT NULL,
-    //    website TEXT,
-    //    comment TEXT NOT NULL
-    //);
-    //`)
-
-    defer db.Close()
     if err != nil {
 	fmt.Println(fmt.Errorf("error: %w", err))
         os.Exit(1)
     }
+    _, err = db.Exec("CREATE TABLE IF NOT EXISTS banned_names(banned_name TEXT NOT NULL);")
+    if err != nil {
+	fmt.Println(fmt.Errorf("error: %w", err))
+        os.Exit(1)
+    }
+    _, err = db.Exec("CREATE TABLE IF NOT EXISTS banned_domains(banned_domain TEXT NOT NULL);")
+    if err != nil {
+	fmt.Println(fmt.Errorf("error: %w", err))
+        os.Exit(1)
+    }
+
     //// Uncomment if testing to see if this works
-    //http.HandleFunc("/tmp", func(w http.ResponseWriter, req *http.Request){http.ServeFile(w,req,"index.html")})
+    http.HandleFunc("/tmp", func(w http.ResponseWriter, req *http.Request){http.ServeFile(w,req,"index.html")})
     http.HandleFunc("/",resolve_comments(db))
     go http.ListenAndServe(":80",nil)
     fmt.Println("Listening on 80")
@@ -153,8 +147,42 @@ func insert_comment(db *sqlx.DB, path string, comment Comment, email_verified bo
 func query_comments(db *sqlx.DB, path string) ([]Comment, error){
     comments := []Comment{}
     err := db.Select(&comments, "SELECT username, email, website, comment FROM comments WHERE blog_post=$1 ORDER BY id", path)
-
+    if err != nil {
+	return nil, err
+    }
+    ban_check, err := in_bans(db)
+    if err != nil{
+	return nil, err
+    }
+    comments = filter(comments, ban_check)
     return comments, err   
+}
+func in_bans(db *sqlx.DB)(func (comment Comment) bool, error){
+    name_list :=  []string{}
+    err := db.Select(&name_list,"SELECT banned_name FROM banned_names")
+    if err != nil {
+	return nil, err
+    }
+    domain_list := []string{}
+    err = db.Select(&domain_list,"SELECT banned_domain FROM banned_domains")
+    if err != nil {
+	return nil, err
+    }
+    return func(c Comment) bool{
+	comment_email_domain := strings.Split(c.Email,"@")
+	for _, d := range domain_list {
+	    if comment_email_domain[1] == d {
+		return false
+	    }
+	}
+	for _, n := range name_list {
+	    if c.Email == n {
+		return false
+	    }
+	}
+	return true
+	  return true 
+    }, nil
 }
 type CookieResolution struct {
     UI string
@@ -203,7 +231,7 @@ func post_interface(path string, email_verified bool) string{
 	<br/>
 	<label for="post">post</label>
 	<input name="post" id="post" type="text" placeholder="post"/>
-	<input name="submit" id="submit" value="submit comment" type="submit"/>
+	<input name="submit" id="submit" value="Submit Comment" type="submit"/>
     </form>`, lead, path)
     return tmp
 }
@@ -292,4 +320,14 @@ func gen_pq_str() (string, error){
     }
 
     return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s", URI, Port, User, Password, DBName, SSL), nil
+}
+
+// got this from https://stackoverflow.com/a/37563128
+func filter(ss []Comment, test func(Comment) bool) (ret []Comment) {
+    for _, s := range ss {
+        if test(s) {
+            ret = append(ret, s)
+        }
+    }
+    return
 }

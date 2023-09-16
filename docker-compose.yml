@@ -6,6 +6,9 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
+    # for testing, when not testing remove these lines
+    volumes:
+      - ./index.html:/application/index.html
     ports:
       - "127.0.0.1:3939:80"
     environment:
