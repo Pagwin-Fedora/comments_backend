@@ -8,7 +8,8 @@ import (
 	"html/template"
 	"net/http"
 	"strings"
-
+	mailjet "github.com/mailjet/mailjet-apiv3-go/v4"
+	mailjet_resources "github.com/mailjet/mailjet-apiv3-go/v4/resources"
 	//"runtime/debug"
 	"os"
 	"regexp"
@@ -29,11 +30,11 @@ type Comment struct {
 // there may be a way of using the single template in the list one but I'm not gonna bother figuring out how
 var tmpl, err = template.New("Comment template").Parse(`
     {{define "single"}}
-	<div class="comment"><h4> {{.Username}}({{.Email}}) posted</h4><p>{{.Content}}</p></div>
+	<div class="comment"><h4> {{.Username}}(<a href="mailto://{{.Email}}">{{.Email}}</a>) posted</h4><p>{{.Content}}</p></div>
     {{end}}
     {{define "list"}}
 	{{range .}}
-	    <div class="comment"><h4> {{.Username}}({{.Email}}) posted</h4><p>{{.Content}}</p></div>
+	    <div class="comment"><h4> {{.Username}}(<a href="mailto://{{.Email}}">{{.Email}}</a>) posted</h4><p>{{.Content}}</p></div>
 	{{end}}
     {{end}}
     `)
@@ -52,9 +53,30 @@ func main(){
         os.Exit(1)
     }
     // DB stuff
+    err = create_tables(db)
+    if err != nil {
+	fmt.Println(fmt.Errorf("error: %w", err))
+        os.Exit(1)
+    }
+    //// Uncomment if testing to see if this works
+    http.HandleFunc("/tmp", func(w http.ResponseWriter, req *http.Request){http.ServeFile(w,req,"index.html")})
+    http.HandleFunc("/verify/", handle_verification(db))
+    http.HandleFunc("/",resolve_comments(db))
+    go http.ListenAndServe(":80",nil)
+    fmt.Println("Listening on 80")
+    select {}
+}
+func create_tables(db *sqlx.DB) error{
+    // database that holds all the comments
+    // the id is the id of the comment, useful for ordering in order of creation and other stuff
+    // blog_post is just the string that corresponds with the blog the comment is on
+    // username is the username they gave
+    // email is the email they gave
+    // email verified is whether or not they had a cookie or clicked a verification link 0=no 1=yes
+    // website(unused) is the poster's website
+    // comment the actual body of the comment
     _, err = db.Exec(`
     CREATE TABLE IF NOT EXISTS comments(
-        -- postgres seems to have SERIAL so we can use that instead of this being a primary key
         id SERIAL,
         blog_post TEXT NOT NULL,
         username TEXT NOT NULL,
@@ -65,28 +87,53 @@ func main(){
     );
     `)
     if err != nil {
-	fmt.Println(fmt.Errorf("error: %w", err))
-        os.Exit(1)
+	return err
     }
+    // ban list of full emails
     _, err = db.Exec("CREATE TABLE IF NOT EXISTS banned_names(banned_name TEXT NOT NULL);")
     if err != nil {
-	fmt.Println(fmt.Errorf("error: %w", err))
-        os.Exit(1)
+	return err
     }
+    // ban list of email domains
     _, err = db.Exec("CREATE TABLE IF NOT EXISTS banned_domains(banned_domain TEXT NOT NULL);")
     if err != nil {
-	fmt.Println(fmt.Errorf("error: %w", err))
-        os.Exit(1)
+	return err
     }
-
-    //// Uncomment if testing to see if this works
-    http.HandleFunc("/tmp", func(w http.ResponseWriter, req *http.Request){http.ServeFile(w,req,"index.html")})
-    http.HandleFunc("/",resolve_comments(db))
-    go http.ListenAndServe(":80",nil)
-    fmt.Println("Listening on 80")
-    select {}
+    // cookie, email pairings
+    _, err = db.Exec("CREATE TABLE IF NOT EXISTS cookies(cookie TEXT NOT NULL, email TEXT NOT NULL);")
+    return nil
 }
-
+// /verify/xxxx
+// xxxx is the cookie, should write out a UI that asks if they want to skip the email verification step in future on the current device
+func handle_verification(db *sqlx.DB) func(w http.ResponseWriter, req *http.Request){
+return func (w http.ResponseWriter, req *http.Request){
+    
+}
+}
+func start_verification(db *sqlx.DB, email string, name string) error{
+    mailjet_client := mailjet.NewMailjetClient(os.Getenv("MAILJET_APIKEY_PUBLIC"), os.Getenv("MAILJET_APIKEY_PRIVATE"))
+    messagesInfo := []mailjet.InfoMessagesV31 {
+	mailjet.InfoMessagesV31{
+	    From: &mailjet.RecipientV31{
+		Email: "no-reply@pagwin.xyz",
+		Name: "Email verification",
+	    },
+	    To: &mailjet.RecipientsV31{
+		mailjet.RecipientV31 {
+		    Email: email,
+		    Name: name,
+		},
+	    },
+	    Subject: "Verifying your email for a comment on a blog on pagwin.xyz",
+	    //TODO: templating for these bits that show the comment made and where it was made as well as a link with the cookie(see handle_verification)
+	    TextPart: "",
+	    HTMLPart: "",
+	  },
+    }
+    messages := mailjet.MessagesV31{Info: messagesInfo }
+    _, err := mailjet_client.SendMailV31(&messages)
+    return err
+}
 func post_comment(db *sqlx.DB) func(w http.ResponseWriter, req *http.Request){
 return func (w http.ResponseWriter, req *http.Request){
     //fmt.Println("post_comment: ",req.URL.Path)
