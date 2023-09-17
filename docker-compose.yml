@@ -9,7 +9,7 @@ services:
     # for testing, when not testing remove these lines and use ENV vars for the mailjet creds instead
     volumes:
       - ./index.html:/application/index.html
-        #- ./mailjet_creds.toml:/application/mailjet_creds.toml
+      - ./mailjet_creds.toml:/application/mailjet_creds.toml
     ports:
       - "127.0.0.1:3939:80"
     environment:
@@ -19,6 +19,7 @@ services:
       DB_PASSWORD: kemal
       DB_NAME: comments
       DB_SSL: disable
+      BASE_URL: http://localhost:3939
     depends_on:
       - comments-db
   comments-db:

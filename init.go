@@ -4,13 +4,17 @@ import (
 	//"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"log"
-	"github.com/BurntSushi/toml"
 	"html/template"
+	"io/fs"
+	"log"
 	"net/http"
 	"strings"
+
+	"github.com/BurntSushi/toml"
 	mailjet "github.com/mailjet/mailjet-apiv3-go/v4"
+
 	//mailjet_resources "github.com/mailjet/mailjet-apiv3-go/v4/resources"
 	//"runtime/debug"
 	"os"
@@ -117,6 +121,7 @@ func start_verification(db *sqlx.DB, email string, name string) error{
     if err != nil {
 	return err
     }
+    auth_key := gen_auth(db, email)
     mailjet_client := mailjet.NewMailjetClient(mailjet_public, mailjet_private)
     messagesInfo := []mailjet.InfoMessagesV31 {
 	mailjet.InfoMessagesV31{
@@ -132,7 +137,7 @@ func start_verification(db *sqlx.DB, email string, name string) error{
 	    },
 	    Subject: "Verifying your email for a comment on a blog on pagwin.xyz",
 	    //TODO: templating for these bits that show the comment made and where it was made as well as a link with the cookie(see handle_verification)
-	    TextPart: "",
+	    TextPart: os.Getenv("BASE_URL")+"/verify/"+auth_key,
 	    HTMLPart: "",
 	  },
     }
@@ -148,10 +153,13 @@ func get_mailjet_creds() (string, string, error){
     var creds MailjetCreds
     _, err := toml.DecodeFile("./mailjet_creds.toml",&creds)
     if err != nil {
-	log.Output(1,err.Error())
+	var tmp os.PathError
+	if errors.As(err,&tmp){
+	    return os.Getenv("MAILJET_APIKEY_PUBLIC"), os.Getenv("MAILJET_APIKEY_PRIVATE"), nil
+	}
 	return "", "", err
     }
-    return os.Getenv("MAILJET_APIKEY_PUBLIC"), os.Getenv("MAILJET_APIKEY_PRIVATE"), nil
+    return creds.Api_key, creds.Secret_key, nil
 }
 func post_comment(db *sqlx.DB) func(w http.ResponseWriter, req *http.Request){
 return func (w http.ResponseWriter, req *http.Request){
@@ -204,7 +212,6 @@ func insert_comment(db *sqlx.DB, path string, comment Comment, email_verified bo
     }else {
 	tmp = 0
     }
-
 
     _, err := db.Exec("INSERT INTO comments(blog_post, username, email, email_verified, comment) VALUES ($1,$2,$3,$4,$5)", path, comment.Username, comment.Email, tmp, comment.Content)
 
@@ -278,9 +285,14 @@ func resolve_cookie(path string, cookie *http.Cookie, email string, err error) C
 	Err:nil,
     }
 }
-func is_validated(cookie *http.Cookie, email string) bool{
-    // TODO: make an sql table with cookies, emails and expiries
-    return true
+type CookieRow struct{
+    cookie string `db:"cookie"`
+    email string `db:"email"`
+}
+func is_validated(db *sqlx.DB, cookie *http.Cookie, email string) bool{
+    var rows []CookieRow
+    db.Select(&rows, "SELECT cookie,email FROM cookies WHERE cookie=$1 AND email=$2", cookie.Value, email)
+    return len(rows) > 0 
 }
 
 // TODO: swap out email_verified for an enum due to needing this method for resolve_comments
