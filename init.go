@@ -5,11 +5,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
+	"github.com/BurntSushi/toml"
 	"html/template"
 	"net/http"
 	"strings"
 	mailjet "github.com/mailjet/mailjet-apiv3-go/v4"
-	mailjet_resources "github.com/mailjet/mailjet-apiv3-go/v4/resources"
+	//mailjet_resources "github.com/mailjet/mailjet-apiv3-go/v4/resources"
 	//"runtime/debug"
 	"os"
 	"regexp"
@@ -111,7 +113,11 @@ return func (w http.ResponseWriter, req *http.Request){
 }
 }
 func start_verification(db *sqlx.DB, email string, name string) error{
-    mailjet_client := mailjet.NewMailjetClient(os.Getenv("MAILJET_APIKEY_PUBLIC"), os.Getenv("MAILJET_APIKEY_PRIVATE"))
+    mailjet_public, mailjet_private, err := get_mailjet_creds()
+    if err != nil {
+	return err
+    }
+    mailjet_client := mailjet.NewMailjetClient(mailjet_public, mailjet_private)
     messagesInfo := []mailjet.InfoMessagesV31 {
 	mailjet.InfoMessagesV31{
 	    From: &mailjet.RecipientV31{
@@ -131,17 +137,28 @@ func start_verification(db *sqlx.DB, email string, name string) error{
 	  },
     }
     messages := mailjet.MessagesV31{Info: messagesInfo }
-    _, err := mailjet_client.SendMailV31(&messages)
+    _, err = mailjet_client.SendMailV31(&messages)
     return err
+}
+type MailjetCreds struct {
+    Api_key string `toml:"api_key"`
+    Secret_key string `toml:"secret_key"`
+}
+func get_mailjet_creds() (string, string, error){
+    var creds MailjetCreds
+    _, err := toml.DecodeFile("./mailjet_creds.toml",&creds)
+    if err != nil {
+	log.Output(1,err.Error())
+	return "", "", err
+    }
+    return os.Getenv("MAILJET_APIKEY_PUBLIC"), os.Getenv("MAILJET_APIKEY_PRIVATE"), nil
 }
 func post_comment(db *sqlx.DB) func(w http.ResponseWriter, req *http.Request){
 return func (w http.ResponseWriter, req *http.Request){
-    //fmt.Println("post_comment: ",req.URL.Path)
-
     if req.Method == "GET" {
 	return
     }
-
+    
     comment := Comment{}
     json.NewDecoder(req.Body).Decode(&comment)
 
@@ -153,7 +170,10 @@ return func (w http.ResponseWriter, req *http.Request){
         w.WriteHeader(500)
         return
     }
-
+    if resolution.ValidatedEmail == false {
+	err = start_verification(db, comment.Email, comment.Username)
+	//error handling is for the weak
+    }
     w.Write([]byte(resolution.UI))
 
     if comment.Content == "" {

@@ -6,9 +6,10 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
-    # for testing, when not testing remove these lines
+    # for testing, when not testing remove these lines and use ENV vars for the mailjet creds instead
     volumes:
       - ./index.html:/application/index.html
+        #- ./mailjet_creds.toml:/application/mailjet_creds.toml
     ports:
       - "127.0.0.1:3939:80"
     environment:
