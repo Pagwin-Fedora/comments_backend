@@ -1,3 +1,0 @@
-id,  blog_post, username, email,  email_verified  website,          comment
-int, string,    string,   string, int(C boolean), optional<string>, string
-
