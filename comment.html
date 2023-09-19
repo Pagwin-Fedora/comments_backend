@@ -1,0 +1,8 @@
+{{define "single"}}
+    <div class="comment"><h4 class="comment-title"> {{.Username}}(<a href="mailto://{{.Email}}">{{.Email}}</a>) posted</h4><p class="comment-body">{{.Content}}</p></div>
+{{end}}
+{{define "list"}}
+    {{range .}}
+	<div class="comment"><h4 class="comment-title"> {{.Username}}(<a href="mailto://{{.Email}}">{{.Email}}</a>) posted</h4><p class="comment-body">{{.Content}}</p></div>
+    {{end}}
+{{end}}

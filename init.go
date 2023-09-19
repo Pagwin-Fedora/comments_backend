@@ -2,6 +2,7 @@ package main
 
 import (
 	//"context"
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -34,16 +35,7 @@ type Comment struct {
 }
 
 // there may be a way of using the single template in the list one but I'm not gonna bother figuring out how
-var tmpl, err = template.New("Comment template").Parse(`
-    {{define "single"}}
-	<div class="comment"><h4> {{.Username}}(<a href="mailto://{{.Email}}">{{.Email}}</a>) posted</h4><p>{{.Content}}</p></div>
-    {{end}}
-    {{define "list"}}
-	{{range .}}
-	    <div class="comment"><h4> {{.Username}}(<a href="mailto://{{.Email}}">{{.Email}}</a>) posted</h4><p>{{.Content}}</p></div>
-	{{end}}
-    {{end}}
-    `)
+var tmpl, err = template.New("Comment template").ParseFiles("comment.html")
 
 func main(){
 
@@ -113,16 +105,28 @@ func create_tables(db *sqlx.DB) error{
 // xxxx is the cookie, should write out a UI that asks if they want to skip the email verification step in future on the current device
 func handle_verification(db *sqlx.DB) func(w http.ResponseWriter, req *http.Request){
 return func (w http.ResponseWriter, req *http.Request){
-    
+    log.Println(req.URL.Path)
 }
 }
-func start_verification(db *sqlx.DB, email string, name string) error{
+func gen_auth(db *sqlx.DB, email string) string{
+    return "abcd"
+}
+func start_verification(db *sqlx.DB, comment Comment) error{
     mailjet_public, mailjet_private, err := get_mailjet_creds()
     if err != nil {
 	return err
     }
-    auth_key := gen_auth(db, email)
+    template, err := template.New("No Validation").ParseFiles("email_verification.html")
+    if err != nil {
+	return err
+    }
+    auth_key := gen_auth(db, comment.Email)
     mailjet_client := mailjet.NewMailjetClient(mailjet_public, mailjet_private)
+    var buf bytes.Buffer
+    err := template.ExecuteTemplate(&buf, "no_verify", comment)
+    if err != nil {
+	return err
+    }
     messagesInfo := []mailjet.InfoMessagesV31 {
 	mailjet.InfoMessagesV31{
 	    From: &mailjet.RecipientV31{
@@ -131,18 +135,20 @@ func start_verification(db *sqlx.DB, email string, name string) error{
 	    },
 	    To: &mailjet.RecipientsV31{
 		mailjet.RecipientV31 {
-		    Email: email,
-		    Name: name,
+		    Email: comment.Email,
+		    Name: comment.Username,
 		},
 	    },
 	    Subject: "Verifying your email for a comment on a blog on pagwin.xyz",
 	    //TODO: templating for these bits that show the comment made and where it was made as well as a link with the cookie(see handle_verification)
-	    TextPart: os.Getenv("BASE_URL")+"/verify/"+auth_key,
-	    HTMLPart: "",
+	    TextPart: "This email is an html email, if you have no idea what pagwin.xyz is block this address",
+	    // very hacky I know
+	    HTMLPart: fmt.Sprintf(buf.String(),os.Getenv("BASE_URL")+"/verify/"+auth_key),
 	  },
     }
     messages := mailjet.MessagesV31{Info: messagesInfo }
     _, err = mailjet_client.SendMailV31(&messages)
+    log.Printf("Tried to send an email to %s to verify\n", comment.Email)
     return err
 }
 type MailjetCreds struct {
@@ -161,6 +167,7 @@ func get_mailjet_creds() (string, string, error){
     }
     return creds.Api_key, creds.Secret_key, nil
 }
+
 func post_comment(db *sqlx.DB) func(w http.ResponseWriter, req *http.Request){
 return func (w http.ResponseWriter, req *http.Request){
     if req.Method == "GET" {
@@ -179,8 +186,14 @@ return func (w http.ResponseWriter, req *http.Request){
         return
     }
     if resolution.ValidatedEmail == false {
+	template, err := template.New("No Validation").ParseFiles("email_sent_notif.html")
+	if err != nil {
+	    w.Write([]byte("template error"))
+	    w.WriteHeader(500)
+	    return
+	}
 	err = start_verification(db, comment.Email, comment.Username)
-	//error handling is for the weak
+	template.ExecuteTemplate(w,"no_verify",comment)
     }
     w.Write([]byte(resolution.UI))
 
@@ -206,6 +219,7 @@ return func (w http.ResponseWriter, req *http.Request){
 }
 
 func insert_comment(db *sqlx.DB, path string, comment Comment, email_verified bool) error {
+    comment.
     var tmp int
     if email_verified{
 	tmp = 1
