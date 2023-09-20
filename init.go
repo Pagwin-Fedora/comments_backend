@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
-	"io/fs"
 	"log"
 	"net/http"
 	"strings"
@@ -123,7 +122,7 @@ func start_verification(db *sqlx.DB, comment Comment) error{
     auth_key := gen_auth(db, comment.Email)
     mailjet_client := mailjet.NewMailjetClient(mailjet_public, mailjet_private)
     var buf bytes.Buffer
-    err := template.ExecuteTemplate(&buf, "no_verify", comment)
+    err = template.ExecuteTemplate(&buf, "email_verification", comment)
     if err != nil {
 	return err
     }
@@ -160,7 +159,7 @@ func get_mailjet_creds() (string, string, error){
     _, err := toml.DecodeFile("./mailjet_creds.toml",&creds)
     if err != nil {
 	var tmp os.PathError
-	if errors.As(err,&tmp){
+	if errors.As(err, &tmp){
 	    return os.Getenv("MAILJET_APIKEY_PUBLIC"), os.Getenv("MAILJET_APIKEY_PRIVATE"), nil
 	}
 	return "", "", err
@@ -179,7 +178,7 @@ return func (w http.ResponseWriter, req *http.Request){
 
     //post_fragment := post_interface("e")
     cookie, err := req.Cookie("login")
-    resolution := resolve_cookie(req.URL.Path, cookie, comment.Email, err)
+    resolution := resolve_cookie(db, req.URL.Path, cookie, comment.Email, err)
     if resolution.Err != nil {
 	w.Write([]byte(fmt.Sprint("Error:",resolution.Err)))
         w.WriteHeader(500)
@@ -192,7 +191,10 @@ return func (w http.ResponseWriter, req *http.Request){
 	    w.WriteHeader(500)
 	    return
 	}
-	err = start_verification(db, comment.Email, comment.Username)
+	err = start_verification(db, comment)
+	if err!=nil {
+	    w.Write([]byte(err.Error()))
+	}
 	template.ExecuteTemplate(w,"no_verify",comment)
     }
     w.Write([]byte(resolution.UI))
@@ -219,7 +221,6 @@ return func (w http.ResponseWriter, req *http.Request){
 }
 
 func insert_comment(db *sqlx.DB, path string, comment Comment, email_verified bool) error {
-    comment.
     var tmp int
     if email_verified{
 	tmp = 1
@@ -277,8 +278,9 @@ type CookieResolution struct {
     ValidatedEmail bool
     Err error
 }
-func resolve_cookie(path string, cookie *http.Cookie, email string, err error) CookieResolution{
-    if err == http.ErrNoCookie || !is_validated(cookie, email){
+func resolve_cookie(db *sqlx.DB, path string, cookie *http.Cookie, email string, err error) CookieResolution{
+
+    if err == http.ErrNoCookie || !is_validated(db, cookie, email){
 	// TODO: send an email to the address
 	return CookieResolution{
 	    UI: post_interface(path, false),

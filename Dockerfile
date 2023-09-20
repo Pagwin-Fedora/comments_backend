@@ -15,11 +15,11 @@ USER application
 EXPOSE 80/tcp
 # default is localhost due to assuming it being run outside of a container but due to dockern networking we need to change it
 ENV DB_URI="host.docker.internal"
+ADD email_verification.html /application/email_verification.html
+ADD email_sent_notif.html /application/email_sent_notif.html
+ADD comment.html /application/comment.html
 COPY --from=build --chown=application:application /root/comments /application/comments
 #COPY --from=build --chown=application:application /root/index.html /application/index.html
-ADD ./email_verification.html /application/email_verification.html
-ADD ./email_send_notif.html /application/email_sent_notif.html
-ADD ./comment.html /application/comment.html
 RUN ["/bin/chmod", "+x", "/application/comments"]
 WORKDIR /application
 CMD ["/application/comments"]
